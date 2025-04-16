@@ -12,7 +12,7 @@ export function UserStatus() {
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user ? { email: data.user.email } : null);
+      setUser(data.user && typeof data.user.email === "string" ? { email: data.user.email } : null);
       setLoading(false);
     });
   }, []);

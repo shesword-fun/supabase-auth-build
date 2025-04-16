@@ -15,6 +15,10 @@ export function UserTypeDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allUsers, setAllUsers] = useState<{id: string; user_type: string}[] | null>(null);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [rowSaving, setRowSaving] = useState<{[id: string]: boolean}>({});
+  const [rowError, setRowError] = useState<{[id: string]: string | null}>({});
   
 
   useEffect(() => {
@@ -46,6 +50,22 @@ export function UserTypeDashboard() {
           setError(`Unexpected user_type: ${data.user_type}`);
         } else {
           setUserType(data.user_type);
+          // If admin, fetch all users
+          if (data.user_type === "admin") {
+            setUsersLoading(true);
+            const { data: usersData, error: usersError } = await supabase
+              .from("users")
+              .select("id, user_type");
+            if (usersError) {
+              setError("Failed to fetch users list");
+              setAllUsers(null);
+            } else {
+              setAllUsers(usersData || []);
+            }
+            setUsersLoading(false);
+          } else {
+            setAllUsers(null);
+          }
         }
       }
       setLoading(false);
@@ -92,6 +112,69 @@ export function UserTypeDashboard() {
       <UserTypeRadioGroup value={userType} onChange={handleChange} />
       {saving && <span className="text-xs text-gray-500">Saving...</span>}
       {error && <span className="text-xs text-red-500">{error}</span>}
+      {/* Admin-only section */}
+      {userType === "admin" && (
+        <div className="mt-4 w-full">
+          <div className="font-semibold mb-2">User Management (Admin Only)</div>
+          {usersLoading ? (
+            <div>Loading users...</div>
+          ) : allUsers ? (
+            <table className="min-w-full border rounded bg-gray-50 text-xs">
+              <thead>
+                <tr>
+                  <th className="p-2 border-b text-left">User ID</th>
+                  <th className="p-2 border-b text-left">User Type</th>
+                  <th className="p-2 border-b text-left">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allUsers.map((u) => (
+                  <tr key={u.id}>
+                    <td className="p-2 border-b break-all">{u.id}</td>
+                    <td className="p-2 border-b">
+                      <select
+                        className="rounded border px-2 py-1 bg-white"
+                        value={u.user_type}
+                        disabled={rowSaving[u.id]}
+                        onChange={async (e) => {
+                          const newType = e.target.value as UserType;
+                          setRowSaving((prev) => ({ ...prev, [u.id]: true }));
+                          setRowError((prev) => ({ ...prev, [u.id]: null }));
+                          const supabase = createClient();
+                          const { error: updateError } = await supabase
+                            .from("users")
+                            .update({ user_type: newType })
+                            .eq("id", u.id);
+                          if (updateError) {
+                            setRowError((prev) => ({ ...prev, [u.id]: "Failed to update" }));
+                          } else {
+                            setAllUsers((users) =>
+                              users
+                                ? users.map((user) =>
+                                    user.id === u.id ? { ...user, user_type: newType } : user
+                                  )
+                                : users
+                            );
+                          }
+                          setRowSaving((prev) => ({ ...prev, [u.id]: false }));
+                        }}
+                      >
+                        <option value="admin">admin</option>
+                        <option value="merchant">merchant</option>
+                        <option value="visitor">visitor</option>
+                      </select>
+                    </td>
+                    <td className="p-2 border-b">
+                      {rowSaving[u.id] && <span className="text-gray-500">Saving...</span>}
+                      {rowError[u.id] && <span className="text-red-500">{rowError[u.id]}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
