@@ -22,9 +22,13 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
+  const [adminPassword, setAdminPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+
+  // Must use NEXT_PUBLIC_USER_TYPE_PASSWORD for client-side access
+  const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_USER_TYPE_PASSWORD || '';
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -36,6 +40,14 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
       setError('Passwords do not match')
       setIsLoading(false)
       return
+    }
+
+    if (userType === 'admin') {
+      if (!adminPassword || adminPassword !== ADMIN_PASSWORD) {
+        setError('Invalid admin password.');
+        setIsLoading(false);
+        return;
+      }
     }
 
     try {
@@ -103,6 +115,18 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                 />
               </div>
               <UserTypeRadioGroup value={userType} onChange={setUserType} className="mt-2" />
+              {userType === 'admin' && (
+                <div className="grid gap-2">
+                  <Label htmlFor="admin-password">Admin Password</Label>
+                  <Input
+                    id="admin-password"
+                    type="password"
+                    required
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                  />
+                </div>
+              )}
               {error && <p className="text-sm text-red-500">{error}</p>}
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? 'Creating an account...' : 'Sign up'}

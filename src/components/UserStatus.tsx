@@ -34,9 +34,21 @@ export function UserStatus() {
     );
   }
 
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUser(null);
+    window.location.href = "/";
+  };
+
   return (
-    <div className="text-sm text-gray-700 dark:text-gray-200">
-      Logged in as <span className="font-medium">{user.email}</span>
+    <div className="flex items-center gap-4 text-sm text-gray-700 dark:text-gray-200">
+      <span>
+        Logged in as <span className="font-medium">{user.email}</span>
+      </span>
+      <Button variant="outline" onClick={handleSignOut} className="ml-2">
+        Sign Out
+      </Button>
     </div>
   );
 }

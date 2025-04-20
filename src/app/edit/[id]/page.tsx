@@ -2,7 +2,8 @@ import { createClient as createSupabaseClient } from "@/lib/server";
 import { notFound } from "next/navigation";
 import { EditProfileForm } from "@/components/EditProfileForm";
 
-export default async function EditProfilePage({ params }: { params: { id: string } }) {
+export default async function EditProfilePage(props: { params: Promise<{ id: string }> }) {
+  const { id } = await props.params;
   const supabase = await createSupabaseClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
   // Fetch current user's user_type
@@ -17,8 +18,8 @@ export default async function EditProfilePage({ params }: { params: { id: string
   }
   const { data, error } = await supabase
     .from("users")
-    .select("id, location, slug")
-    .eq("id", params.id)
+    .select("id, location, slug, profile_image_url")
+    .eq("id", id)
     .single();
 
   if (error || !data) notFound();
@@ -37,7 +38,7 @@ export default async function EditProfilePage({ params }: { params: { id: string
     <main className="flex flex-col items-center justify-center min-h-screen p-8">
       <div className="max-w-md w-full bg-white rounded shadow p-6 border">
         <h1 className="text-2xl font-bold mb-4">Edit Profile</h1>
-        <EditProfileForm userId={data.id} initialLocation={data.location} initialSlug={data.slug} />
+        <EditProfileForm userId={data.id} initialLocation={data.location} initialSlug={data.slug} initialProfileImageUrl={data.profile_image_url} />
       </div>
     </main>
   );

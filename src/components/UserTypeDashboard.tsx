@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { UserTypeRadioGroup, UserType } from "@/components/ui/user-type-radio-group";
 
 import { createClient } from "@/lib/client";
@@ -8,17 +8,26 @@ import { Button } from "@/components/ui/button";
 
 export function UserTypeDashboard() {
   const [userType, setUserType] = useState<UserType>("visitor"); // 'visitor', 'merchant', or 'admin'
+  const [pendingType, setPendingType] = useState<UserType | null>(null);
 
   // Allowed user types
   const allowedUserTypes: UserType[] = ["visitor", "merchant", "admin"];
-  const isValidUserType = (type: any): type is UserType => allowedUserTypes.includes(type);
+  const isValidUserType = useCallback(
+    (type: unknown): type is UserType =>
+      typeof type === "string" && allowedUserTypes.includes(type as UserType),
+    [allowedUserTypes]
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [adminPassword, setAdminPassword] = useState("");
   const [allUsers, setAllUsers] = useState<{id: string; user_type: string}[] | null>(null);
   const [usersLoading, setUsersLoading] = useState(false);
   const [rowSaving, setRowSaving] = useState<{[id: string]: boolean}>({});
   const [rowError, setRowError] = useState<{[id: string]: string | null}>({});
+  const [rowAdminPasswords, setRowAdminPasswords] = useState<{[id: string]: string}>({});
+  // Get admin password from env
+  const ADMIN_PASSWORD = process.env.NEXT_PUBLIC_USER_TYPE_PASSWORD || "";
   
 
   useEffect(() => {
@@ -71,36 +80,47 @@ export function UserTypeDashboard() {
       setLoading(false);
     };
     fetchUserType();
-  }, []);
+  }, [isValidUserType]);
 
-  const handleChange = async (newType: UserType) => {
-    setUserType(newType);
-    setSaving(true);
+  const handleChange = (newType: UserType) => {
     setError(null);
+    setPendingType(newType);
+  };
+
+  const handleSave = async () => {
+    setError(null);
+    if (pendingType === "admin") {
+      if (!adminPassword || adminPassword !== ADMIN_PASSWORD) {
+        setError("Invalid admin password");
+        return;
+      }
+    }
+    setSaving(true);
     const supabase = createClient();
     const {
       data: { user },
       error: userError,
     } = await supabase.auth.getUser();
-    console.log("Auth user (update):", user);
     if (userError || !user) {
       setError("Could not update user type (no user)");
       setSaving(false);
       return;
     }
-    // Validate with simple check
-    if (!isValidUserType(newType)) {
+    if (!isValidUserType(pendingType)) {
       setError("Invalid user type selected.");
       setSaving(false);
       return;
     }
     const { error: dbError } = await supabase
       .from("users")
-      .update({ user_type: newType })
+      .update({ user_type: pendingType })
       .eq("id", user.id);
-    console.log("DB result (update):", dbError);
     if (dbError) {
       setError("Failed to update user type");
+    } else {
+      setUserType(pendingType);
+      setPendingType(null);
+      setAdminPassword("");
     }
     setSaving(false);
   };
@@ -109,7 +129,21 @@ export function UserTypeDashboard() {
 
   return (
     <div className="flex flex-col gap-2 items-start">
-      <UserTypeRadioGroup value={userType} onChange={handleChange} />
+      <UserTypeRadioGroup value={pendingType ?? userType} onChange={handleChange} />
+      {pendingType === 'admin' && (
+        <div className="grid gap-2 mb-2">
+          <input
+            type="password"
+            placeholder="Admin password"
+            value={adminPassword}
+            onChange={e => setAdminPassword(e.target.value)}
+            className="border rounded px-2 py-1"
+          />
+        </div>
+      )}
+      {(pendingType !== null && pendingType !== userType) && (
+        <Button onClick={handleSave} className="mb-2">Save</Button>
+      )}
       {saving && <span className="text-xs text-gray-500">Saving...</span>}
       {error && <span className="text-xs text-red-500">{error}</span>}
       {/* Admin-only section */}
@@ -140,6 +174,14 @@ export function UserTypeDashboard() {
                           const newType = e.target.value as UserType;
                           setRowSaving((prev) => ({ ...prev, [u.id]: true }));
                           setRowError((prev) => ({ ...prev, [u.id]: null }));
+                          // Require password for admin
+                          if (newType === 'admin') {
+                            if (!rowAdminPasswords[u.id] || rowAdminPasswords[u.id] !== ADMIN_PASSWORD) {
+                              setRowError((prev) => ({ ...prev, [u.id]: "Invalid admin password" }));
+                              setRowSaving((prev) => ({ ...prev, [u.id]: false }));
+                              return;
+                            }
+                          }
                           const supabase = createClient();
                           const { error: updateError } = await supabase
                             .from("users")
@@ -167,6 +209,17 @@ export function UserTypeDashboard() {
                     <td className="p-2 border-b">
                       {rowSaving[u.id] && <span className="text-gray-500">Saving...</span>}
                       {rowError[u.id] && <span className="text-red-500">{rowError[u.id]}</span>}
+                    </td>
+                    <td className="p-2 border-b">
+                      {u.user_type !== 'admin' && (
+                        <input
+                          type="password"
+                          placeholder="Admin password"
+                          value={rowAdminPasswords[u.id] || ''}
+                          onChange={e => setRowAdminPasswords(prev => ({ ...prev, [u.id]: e.target.value }))}
+                          className="border rounded px-2 py-1 text-xs"
+                        />
+                      )}
                     </td>
                   </tr>
                 ))}

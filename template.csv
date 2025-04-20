@@ -1,0 +1,22 @@
+merchant_id,name,Location,Phone number,Description,About,Gender,Sexuality,Last login,Rating,Rates,Services,Social Media,Resolved social media,images,thumbnails,main image,videourl
+generated,text,"jsonb like: {
+    ""area"": ""Glasgow"",
+    ""city"": ""Glasgow"",
+    ""country"": ""United Kingdom - UK""
+  }",number,text,text html formatted,text,text,date/time,number,"jsonb like: ""rates"": {
+    ""In-Call"": {
+      ""1 Hour"": ""150\n                                                GBP""
+    },
+    ""Out-Call"": {
+      ""1 Hour"": ""250\n                                                GBP""
+    }
+",text[],"jsonb like: ""socialMedia"": {
+    ""PayPal"": ""Fernando.santtana@icloud.com"",
+    ""WhatsApp"": ""+447904591988"",
+    ""Bank Transfer"": ""Wise""
+","josnb like: ""resolvedSocialLinks"": {
+    ""X / Twitter"": ""https://x.com/Eusophiabr69"",
+    ""Facebook"": ""https://www.facebook.com/eusophiabr69"",
+    ""Instagram"": ""https://www.instagram.com/eusophiabr69/?igsh=a3plMTM4aTA1NnQ1&utm_source=qr""
+  }
+",text[],text[],text,text
