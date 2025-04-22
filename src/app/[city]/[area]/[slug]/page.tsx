@@ -5,6 +5,8 @@ import { PhoneBadge } from '@/components/PhoneBadge';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { Navbar } from '@/components/Navbar';
 import { CopyButton } from '@/components/CopyButton';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,23 +16,46 @@ export async function generateStaticParams() {
 
 export default async function MerchantDetailPage({ params }: { params: Promise<{ city: string; area: string; slug: string }> }) {
   const { city, area, slug } = await params;
-  const decodedCity = decodeURIComponent(city).trim().toLowerCase();
-  const decodedArea = decodeURIComponent(area).trim().toLowerCase();
-  const decodedSlug = decodeURIComponent(slug).trim();
-
   const supabase = await createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+  // Fetch current user's user_type
+  let currentUserType = null;
+  if (currentUser) {
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("user_type")
+      .eq("id", currentUser.id)
+      .single();
+    currentUserType = userRow?.user_type;
+  }
+  // Fetch merchant
   const { data: merchant, error } = await supabase
     .from('merchants')
     .select('*')
-    .eq('slug', decodedSlug)
+    .eq('slug', decodeURIComponent(slug).trim())
     .single();
-
   if (error || !merchant || !merchant.active) {
     notFound();
   }
+  // Convert storage keys to public URLs using the server-side supabase client
+  const images = Array.isArray(merchant.images)
+    ? merchant.images.map((img: string) =>
+        !img ? "" :
+        img.startsWith("http") ? img : supabase.storage.from("merchants").getPublicUrl(img).data.publicUrl || ""
+      ).filter(Boolean)
+    : [];
+  const isAdmin = currentUserType === "admin";
+  const isOwner = Boolean(currentUser?.id && merchant?.id && String(currentUser.id) === String(merchant.id));
+
+  const decodedCity = decodeURIComponent(city).trim().toLowerCase();
+  const decodedArea = decodeURIComponent(area).trim().toLowerCase();
 
   // Defensive: location may be null
   const location = merchant.location || {};
+
+  // Type-safe entries for resolvedsociallinks and rates
+  const resolvedSocialLinks: [string, string][] = Object.entries(merchant.resolvedsociallinks ?? {});
+
   if (
     location.city?.toLowerCase() !== decodedCity ||
     location.area?.toLowerCase() !== decodedArea
@@ -38,13 +63,16 @@ export default async function MerchantDetailPage({ params }: { params: Promise<{
     notFound();
   }
 
-  // Type-safe entries for resolvedsociallinks and rates
-  const resolvedSocialLinks: [string, string][] = Object.entries(merchant.resolvedsociallinks ?? {});
-  const ratesEntries: [string, Record<string, string>][] = Object.entries(merchant.rates ?? {});
-
   return (
     <>
       <Navbar />
+      {(isAdmin || isOwner) && (
+        <div className="flex justify-end mt-4">
+          <Link href={`/edit/${merchant.slug}`} className="inline-block px-4 py-2 bg-primary text-white rounded hover:bg-primary/90 transition">
+            Edit
+          </Link>
+        </div>
+      )}
       <div className="container mx-auto max-w-5xl py-10 px-4 mx-auto">
       <h1 className="text-3xl font-bold mb-2">{merchant.name}</h1>
       <div className="text-gray-600 mb-4">
@@ -53,7 +81,7 @@ export default async function MerchantDetailPage({ params }: { params: Promise<{
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start">
         {/* Left: Gallery + Video */}
         <div className="flex flex-col gap-4">
-          <ImageGallery images={merchant.images || []} altPrefix={merchant.name + ' photo'} />
+          <ImageGallery images={images} altPrefix={merchant.name + ' photo'} />
           <VideoPlayer src={merchant.videoUrl || merchant.video || merchant.videourl || merchant.video_url} />
         </div>
         {/* Right: Info */}
@@ -162,35 +190,37 @@ export default async function MerchantDetailPage({ params }: { params: Promise<{
               </div>
             )}
             {/* Rates */}
-            {merchant.rates && (
-              <div className="mb-2">
-                <span className="font-semibold">Rates: </span>
-                {typeof merchant.rates === 'string' ? (
-                  <span>{merchant.rates}</span>
-                ) : (
-                  <div className="overflow-x-auto mt-2">
-                    <table className="min-w-full text-sm border rounded-lg">
-                      <thead>
-                        <tr>
-                          <th className="px-2 py-1 border bg-gray-100 dark:bg-gray-800">Type</th>
-                          {Object.keys(merchant.rates[Object.keys(merchant.rates)[0]]).map((duration) => (
-                            <th key={duration} className="px-2 py-1 border bg-gray-100 dark:bg-gray-800">{duration}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ratesEntries.map(([type, durations]) => (
-                          <tr key={type}>
-                            <td className="px-2 py-1 border font-semibold">{type}</td>
-                            {(Object.values(durations) as string[]).map((price, i) => (
-                              <td key={i} className="px-2 py-1 border whitespace-pre-line">{price}</td>
+            {merchant.rates && typeof merchant.rates === "object" && (
+              <div className="flex flex-wrap gap-4 mb-4">
+                {["In-Call", "Out-Call"].map((rateType) => {
+                  // Find the key case-insensitively
+                  const key = Object.keys(merchant.rates).find(
+                    (k) => k.toLowerCase() === rateType.toLowerCase()
+                  );
+                  if (!key) return null;
+                  const durations = merchant.rates[key];
+                  return (
+                    <Card key={key} className="min-w-[220px] flex-1">
+                      <CardHeader>
+                        <CardTitle className="text-lg">{rateType}</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {Object.entries(durations).length > 0 ? (
+                          <ul className="space-y-1">
+                            {Object.entries(durations).map(([duration, price]) => (
+                              <li key={duration} className="flex justify-between">
+                                <span className="font-medium">{duration}</span>
+                                <span>{String(price).replace(/\s+GBP$/, " GBP")}</span>
+                              </li>
                             ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                          </ul>
+                        ) : (
+                          <span className="text-gray-400 italic">No rates listed</span>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </div>

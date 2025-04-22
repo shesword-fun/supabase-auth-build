@@ -9,7 +9,10 @@ export type ImageGalleryProps = {
   altPrefix?: string;
 };
 
+
+
 export function ImageGallery({ images, altPrefix = "Gallery image" }: ImageGalleryProps) {
+  // images is now always an array of public URLs
   const [heroIdx, setHeroIdx] = React.useState(0);
   const [modalOpen, setModalOpen] = React.useState(false);
   const heroImg = images?.[heroIdx] || "";

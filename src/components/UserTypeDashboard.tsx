@@ -10,12 +10,12 @@ export function UserTypeDashboard() {
   const [userType, setUserType] = useState<UserType>("visitor"); // 'visitor', 'merchant', or 'admin'
   const [pendingType, setPendingType] = useState<UserType | null>(null);
 
-  // Allowed user types
-  const allowedUserTypes: UserType[] = ["visitor", "merchant", "admin"];
   const isValidUserType = useCallback(
-    (type: unknown): type is UserType =>
-      typeof type === "string" && allowedUserTypes.includes(type as UserType),
-    [allowedUserTypes]
+    (type: unknown): type is UserType => {
+      const allowedUserTypes: UserType[] = ["visitor", "merchant", "admin"];
+      return typeof type === "string" && allowedUserTypes.includes(type as UserType);
+    },
+    []
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
